@@ -50,3 +50,11 @@ class StockSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stock   
         fields = '__all__'
+
+
+class EmailSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+
+
+class PasswordSerializer(serializers.Serializer):
+    password = serializers.CharField(required=True)

@@ -72,7 +72,6 @@ class Book(models.Model):
 
 class Cart(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    books = models.ManyToManyField(Book)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateField(auto_now=True)
 
@@ -81,15 +80,31 @@ class Cart(models.Model):
     
 
 class Order(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     odered_at = models.DateTimeField(auto_now_add=True)
     total_amount = models.IntegerField()
-    status = models.CharField(max_length=100)
+    status = models.CharField(max_length=100, choices=STATUS_CHOICES)
 
     def __str__(self):
         return f"Order by {self.user}"
 
 
 class Stock(models.Model):
-    shop = models.ForeignKey(Shop, on_delete=models.CASCADE)
+    shop = models.OneToOneField(Shop, on_delete=models.CASCADE)
+    book = models.OneToOneField(Book, on_delete=models.CASCADE)
+    stock_count = models.IntegerField(default=0)
+
+
+class CartItem(models.Model):
+    cart = models.ForeignKey(Cart, on_delete=models.CASCADE)
     book = models.ForeignKey(Book, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"CartItem: {self.book.title} in Cart of : {self.cart.user.email}"
