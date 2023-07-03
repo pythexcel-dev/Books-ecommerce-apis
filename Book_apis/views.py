@@ -16,8 +16,7 @@ from .serializers import (
     ShopSerializer,
     PublisherSerializer,
     StockSerializer,
-    EmailSerializer,
-    PasswordSerializer
+    LoginPayloadSerializer
 )
 from rest_framework.response import Response
 from rest_framework import status,permissions
@@ -54,16 +53,10 @@ class RegisterAPIView(APIView):
 class LoginAPIView(APIView):
     
     def post(self, request):
-        email_serializer = EmailSerializer(
-            data={'email':request.data.get("email")}
-        )
-        password_serializer = PasswordSerializer(
-            data={'password':request.data.get("password")}
-        ) 
-        email_serializer.is_valid(raise_exception=True)
-        password_serializer.is_valid(raise_exception=True)
-        email = email_serializer.validated_data['email']
-        password = password_serializer.validated_data['password']
+        serializer = LoginPayloadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        email = serializer.validated_data['email']
+        password = serializer.validated_data['password']
         if user := authenticate(username=email, password=password):
             token, _  = Token.objects.get_or_create(user=user)
             return Response({

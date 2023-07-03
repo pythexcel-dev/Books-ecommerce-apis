@@ -52,9 +52,6 @@ class StockSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
-class EmailSerializer(serializers.Serializer):
+class LoginPayloadSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
-
-
-class PasswordSerializer(serializers.Serializer):
     password = serializers.CharField(required=True)
