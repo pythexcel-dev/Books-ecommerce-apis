@@ -14,4 +14,4 @@ class IsVendorOnly(permissions.BasePermission):
     Custom permission to only allow access to the user itself.
     """
     def has_permission(self, request, view):
-        return request.user.user_role == 'Vendor'
+        return request.user.user_role == 'VENDOR'

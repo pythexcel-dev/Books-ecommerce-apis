@@ -6,17 +6,18 @@ from .models import (
     Book,
     Shop,
     Publisher,
-    Stock
+    Stock,
+    CartItem
 )
 from .serializers import (
     UserSerializer,
     BookSerializer,
     OrderSerializer,
-    CartSerializer,
     ShopSerializer,
     PublisherSerializer,
     StockSerializer,
-    LoginPayloadSerializer
+    LoginPayloadSerializer,
+    CartItemSerializer
 )
 from rest_framework.response import Response
 from rest_framework import status,permissions
@@ -149,6 +150,7 @@ class CreateBookAPIView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsVendorOnly]
    
     def post(self, request):
+        get_object_or_404(Shop, pk=request.data.get('shop'))
         serializer = BookSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -176,3 +178,92 @@ class BookDataAPIView(ListAPIView):
         'shop__name',
         'price'
     ]     
+
+
+class CreateStockAPIView(APIView):
+
+    permission_classes = [permissions.IsAuthenticated, IsVendorOnly]
+   
+    def post(self, request):
+        book_id = request.data.get('book')
+        book = get_object_or_404(Book, pk=book_id)
+        request.data['shop'] = book.shop.id
+        serializer = StockSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({
+            'message': 'Stock Added Successfully',
+            "status" : status.HTTP_201_CREATED
+        })
+    
+
+class CreateCartItemAPIView(APIView):
+
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request):
+        book_id = request.data.get('book')
+        book = get_object_or_404(Book, pk=book_id)
+        user = request.user
+        
+        user_cart, _ = Cart.objects.get_or_create(user=user.id)
+        cart_item = CartItem.objects.filter(cart=user_cart.id, book=book.id).first()
+
+        if cart_item:
+            cart_item.quantity += 1
+            cart_item.save()
+        else:
+            serializer = CartItemSerializer(data={
+                'cart': user_cart.id,
+                'book': book.id,
+                'quantity': 1
+            })
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            
+        stock = Stock.objects.filter(book=book.id).first()
+        stock.stock_count -= 1
+        stock.save()
+
+        return Response(
+            {
+                "message": "Book added to cart successfully!"
+            },
+            status=status.HTTP_201_CREATED
+        )
+
+
+class CartItemsAPIView(ListAPIView):
+
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = CustomPagination
+
+    queryset = CartItem.objects.all()
+    serializer_class = CartItemSerializer 
+
+
+class MakeOrderAPIView(APIView):
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        cart_items = CartItem.objects.filter(cart__user=user)
+        amount = sum(item.book.price * item.quantity for item in cart_items)
+        
+        serializer = OrderSerializer(data={
+            'user':user.id,
+            'total_amount': amount,
+            'status': "ordered"
+        })
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+
+        return Response(
+            {
+                "message": "Book Orderd successfully!",
+                "total_amount": serializer.data['total_amount'],
+                "order_status": serializer.data['status']
+            },
+            status=status.HTTP_201_CREATED
+        )

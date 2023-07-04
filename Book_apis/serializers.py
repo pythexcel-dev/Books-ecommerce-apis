@@ -6,7 +6,8 @@ from .models import (
     Book,
     Shop,
     Publisher,
-    Stock
+    Stock,
+    CartItem
 )
 
 
@@ -49,6 +50,12 @@ class PublisherSerializer(serializers.ModelSerializer):
 class StockSerializer(serializers.ModelSerializer):
     class Meta:
         model = Stock   
+        fields = '__all__'
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CartItem   
         fields = '__all__'
 
 

@@ -71,7 +71,7 @@ class Book(models.Model):
     
 
 class Cart(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateField(auto_now=True)
 
@@ -81,9 +81,10 @@ class Cart(models.Model):
 
 class Order(models.Model):
     STATUS_CHOICES = (
-        ('pending', 'Pending'),
+        ('ordered', 'Ordered'),
         ('processing', 'Processing'),
-        ('completed', 'Completed'),
+        ('shipped', 'Shipped'),
+        ('delivered', 'Delivered'),
         ('cancelled', 'Cancelled'),
     )
     user = models.ForeignKey(User, on_delete=models.CASCADE)

@@ -7,10 +7,12 @@ from .views import (
     UserUpdateAPIView,
     CreateBookAPIView,
     BookDataAPIView,
-    #CreateCartItemAPIView,
-    #CartDataAPIView,
+    CreateStockAPIView,
+    CreateCartItemAPIView,
+    CartItemsAPIView,
     CreateShopAPIView,
-    CreatePublisherAPIView
+    CreatePublisherAPIView,
+    MakeOrderAPIView
 )
 
 
@@ -23,7 +25,9 @@ urlpatterns = [
     path('createpublisher/', CreatePublisherAPIView.as_view()),
     path('createbook/', CreateBookAPIView.as_view()),
     path('books/', BookDataAPIView.as_view()),
-    #path('createcart/', CreateCartItemAPIView.as_view()),
-    #path('cartitems/', CartDataAPIView.as_view()),
+    path('createstock/', CreateStockAPIView.as_view()),
+    path('additem/', CreateCartItemAPIView.as_view()),
+    path('cartitems/', CartItemsAPIView.as_view()),
+    path('order/', MakeOrderAPIView.as_view()),
     path('logout/', LogoutAPIView.as_view()),
 ]
