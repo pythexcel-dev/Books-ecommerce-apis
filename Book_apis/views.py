@@ -24,6 +24,7 @@ from rest_framework import status,permissions
 from django.contrib.auth import authenticate
 from .permissions import IsSelfUser, IsVendorOnly
 from django.shortcuts import get_object_or_404
+from django.db.models import F, Sum
 from rest_framework.authtoken.models import Token
 from rest_framework.generics import ListAPIView
 from rest_framework.pagination import PageNumberPagination
@@ -38,10 +39,8 @@ class RegisterAPIView(APIView):
     def post(self, request):
         serializer = UserSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        user.set_password(request.data['password'])
-        user.save()
-
+        serializer.save()
+        
         return Response(
             {
                 "message":"User Registered successfully",
@@ -77,7 +76,7 @@ class LoginAPIView(APIView):
 
 class LogoutAPIView(APIView):
     
-    permission_classes = [permissions.IsAuthenticated] 
+    permission_classes = (permissions.IsAuthenticated,) 
 
     def post(self, request):
         user = request.user
@@ -97,7 +96,7 @@ class UserUpdateAPIView(APIView):
         serializer = UserSerializer(user)
         return Response(serializer.data)
     
-    def put(self, request, user_id):   
+    def patch(self, request, user_id):   
         user = get_object_or_404(User, pk=user_id)
         serializer = UserSerializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -110,7 +109,7 @@ class UserUpdateAPIView(APIView):
 
 class UserDataAPIView(ListAPIView):
 
-    permission_classes = [permissions.IsAuthenticated, permissions.IsAdminUser]
+    permission_classes = (permissions.IsAuthenticated, permissions.IsAdminUser)
     pagination_class = CustomPagination
 
     queryset = User.objects.all()
@@ -119,7 +118,7 @@ class UserDataAPIView(ListAPIView):
 
 class CreateShopAPIView(APIView):
 
-    permission_classes = [permissions.IsAuthenticated, IsVendorOnly]
+    permission_classes = (permissions.IsAuthenticated, IsVendorOnly)
 
     def post(self, request):
         serializer = ShopSerializer(data=request.data)
@@ -133,7 +132,7 @@ class CreateShopAPIView(APIView):
 
 class CreatePublisherAPIView(APIView):
 
-    permission_classes = [permissions.IsAuthenticated, IsVendorOnly]
+    permission_classes = (permissions.IsAuthenticated, IsVendorOnly)
 
     def post(self, request):
         serializer = PublisherSerializer(data=request.data)
@@ -147,7 +146,7 @@ class CreatePublisherAPIView(APIView):
 
 class CreateBookAPIView(APIView):
 
-    permission_classes = [permissions.IsAuthenticated, IsVendorOnly]
+    permission_classes = (permissions.IsAuthenticated, IsVendorOnly)
    
     def post(self, request):
         get_object_or_404(Shop, pk=request.data.get('shop'))
@@ -162,7 +161,7 @@ class CreateBookAPIView(APIView):
 
 class BookDataAPIView(ListAPIView):
     
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = (permissions.IsAuthenticated,)
     pagination_class = CustomPagination
     queryset = Book.objects.filter(is_available=True)
     serializer_class = BookSerializer
@@ -180,9 +179,9 @@ class BookDataAPIView(ListAPIView):
     ]     
 
 
-class CreateStockAPIView(APIView):
+class StockAPIView(APIView):
 
-    permission_classes = [permissions.IsAuthenticated, IsVendorOnly]
+    permission_classes = (permissions.IsAuthenticated, IsVendorOnly)
    
     def post(self, request):
         book_id = request.data.get('book')
@@ -197,64 +196,63 @@ class CreateStockAPIView(APIView):
         })
     
 
-class CreateCartItemAPIView(APIView):
+class CartItemAPIView(APIView):
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = (permissions.IsAuthenticated,)
+    pagination_class = CustomPagination
+
+    def get(self, request):
+        user_cart = get_object_or_404(Cart, user=request.user)
+        cart_items = CartItem.objects.filter(cart=user_cart)
+        serializer = CartItemSerializer(cart_items, many=True)
+        return Response(serializer.data)
     
     def post(self, request):
         book_id = request.data.get('book')
         book = get_object_or_404(Book, pk=book_id)
         user = request.user
         
-        user_cart, _ = Cart.objects.get_or_create(user=user.id)
-        cart_item = CartItem.objects.filter(cart=user_cart.id, book=book.id).first()
-
-        if cart_item:
-            cart_item.quantity += 1
-            cart_item.save()
-        else:
-            serializer = CartItemSerializer(data={
-                'cart': user_cart.id,
-                'book': book.id,
-                'quantity': 1
-            })
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            
-        stock = Stock.objects.filter(book=book.id).first()
-        stock.stock_count -= 1
-        stock.save()
-
-        return Response(
-            {
-                "message": "Book added to cart successfully!"
-            },
-            status=status.HTTP_201_CREATED
+        user_cart, _ = Cart.objects.get_or_create(user=user)
+        cart_item, created = CartItem.objects.update_or_create(
+            cart=user_cart,
+            book=book,
+            defaults={'quantity': 1}
         )
 
-
-class CartItemsAPIView(ListAPIView):
-
-    permission_classes = [permissions.IsAuthenticated]
-    pagination_class = CustomPagination
-
-    queryset = CartItem.objects.all()
-    serializer_class = CartItemSerializer 
+        if not created:
+            cart_item.quantity += 1
+            cart_item.save()
+            
+        stock = book.stock
+        if stock.stock_count > 0:
+            stock.stock_count -= 1
+            stock.save()
+            return Response({
+                "message": "Book added to cart successfully!",
+                "status" : status.HTTP_201_CREATED
+            })
+        else:
+            cart_item.delete()
+            return Response({
+                "message": "Book is out of stock!",
+                "status" : status.HTTP_204_NO_CONTENT
+            })
 
 
 class MakeOrderAPIView(APIView):
 
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = (permissions.IsAuthenticated,)
 
     def get(self, request):
         user = request.user
         cart_items = CartItem.objects.filter(cart__user=user)
-        amount = sum(item.book.price * item.quantity for item in cart_items)
+        total_amount = cart_items.aggregate(amount=Sum(F('book__price') * F('quantity')))['amount']
         
         serializer = OrderSerializer(data={
             'user':user.id,
-            'total_amount': amount,
-            'status': "ordered"
+            'total_amount': total_amount,
+            'status': Order.StatusChoices.ORDERED,
+            'cart': user.cart.id
         })
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -262,8 +260,7 @@ class MakeOrderAPIView(APIView):
         return Response(
             {
                 "message": "Book Orderd successfully!",
-                "total_amount": serializer.data['total_amount'],
-                "order_status": serializer.data['status']
+                "order_details": serializer.data
             },
             status=status.HTTP_201_CREATED
         )
