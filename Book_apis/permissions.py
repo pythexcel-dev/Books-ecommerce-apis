@@ -1,4 +1,5 @@
-from rest_framework import permissions 
+from rest_framework import permissions
+from .models import User 
 
 
 class IsSelfUser(permissions.BasePermission):
@@ -14,4 +15,4 @@ class IsVendorOnly(permissions.BasePermission):
     Custom permission to only allow access to the user itself.
     """
     def has_permission(self, request, view):
-        return request.user.user_role == 'VENDOR'
+        return request.user.user_role == User.UserRoles.VENDOR
