@@ -7,7 +7,8 @@ from .models import (
     Shop,
     Publisher,
     Stock,
-    CartItem
+    CartItem,
+    OrderedBook
 )
 from .serializers import (
     UserSerializer,
@@ -17,7 +18,8 @@ from .serializers import (
     PublisherSerializer,
     StockSerializer,
     LoginPayloadSerializer,
-    CartItemSerializer
+    CartItemSerializer,
+    OrderedBookSerializer
 )
 from rest_framework.response import Response
 from rest_framework import status,permissions
@@ -203,7 +205,7 @@ class CartItemAPIView(APIView):
 
     def get(self, request):
         user_cart = get_object_or_404(Cart, user=request.user)
-        cart_items = CartItem.objects.filter(cart=user_cart)
+        cart_items = CartItem.objects.filter(cart=user_cart, is_ordered=False)
         serializer = CartItemSerializer(cart_items, many=True)
         return Response(serializer.data)
     
@@ -211,32 +213,33 @@ class CartItemAPIView(APIView):
         book_id = request.data.get('book')
         book = get_object_or_404(Book, pk=book_id)
         user = request.user
-        
-        user_cart, _ = Cart.objects.get_or_create(user=user)
-        cart_item, created = CartItem.objects.update_or_create(
-            cart=user_cart,
-            book=book,
-            defaults={'quantity': 1}
-        )
 
-        if not created:
-            cart_item.quantity += 1
-            cart_item.save()
-            
         stock = book.stock
         if stock.stock_count > 0:
+            user_cart, _ = Cart.objects.get_or_create(user=user)
+            cart_item, created = CartItem.objects.get_or_create(
+                cart=user_cart,
+                book=book,
+                is_ordered=False,
+                defaults={'quantity': 1}
+            )
+            
+            if not created and cart_item.is_ordered == False:
+                cart_item.quantity += 1
+                cart_item.save()
+
             stock.stock_count -= 1
             stock.save()
+
             return Response({
                 "message": "Book added to cart successfully!",
                 "status" : status.HTTP_201_CREATED
             })
-        else:
-            cart_item.delete()
-            return Response({
-                "message": "Book is out of stock!",
-                "status" : status.HTTP_204_NO_CONTENT
-            })
+        
+        return Response({
+            "message": "Book is out of stock!",
+            "status" : status.HTTP_204_NO_CONTENT
+        })
 
 
 class MakeOrderAPIView(APIView):
@@ -245,22 +248,42 @@ class MakeOrderAPIView(APIView):
 
     def get(self, request):
         user = request.user
-        cart_items = CartItem.objects.filter(cart__user=user)
-        total_amount = cart_items.aggregate(amount=Sum(F('book__price') * F('quantity')))['amount']
-        
-        serializer = OrderSerializer(data={
-            'user':user.id,
-            'total_amount': total_amount,
-            'status': Order.StatusChoices.ORDERED,
-            'cart': user.cart.id
-        })
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
+        cart_items = CartItem.objects.filter(cart__user=user, is_ordered=False)
 
-        return Response(
-            {
-                "message": "Book Orderd successfully!",
-                "order_details": serializer.data
-            },
-            status=status.HTTP_201_CREATED
-        )
+        if len(cart_items) > 0:
+            total_amount = cart_items.aggregate(amount=Sum(F('book__price') * F('quantity')))['amount']
+            serializer = OrderSerializer(data={
+                'user':user.id,
+                'total_amount': total_amount,
+                'status': Order.StatusChoices.ORDERED,
+                'cart': user.cart.id
+            })
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            for item in cart_items:
+                print(user.id, serializer.instance.id, item.book.id, item.quantity)
+                ordered_book = OrderedBookSerializer(data={
+                    'user': user.id,
+                    'order': serializer.instance.id,
+                    'book': item.book.id,
+                    'book_quantity': item.quantity
+                })
+
+                ordered_book.is_valid(raise_exception=True)
+                ordered_book.save()
+
+            cart_items.update(is_ordered=True)
+
+            return Response(
+                {
+                    "message": "Book Orderd successfully!",
+                    "order_details": serializer.data
+                },
+                status=status.HTTP_201_CREATED
+            )
+        
+        return Response({
+            "message": "Your Cart is Empty!",
+            "status": status.HTTP_200_OK
+        })

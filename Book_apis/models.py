@@ -89,6 +89,7 @@ class CartItem(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE)
     book = models.ForeignKey(Book, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=0)
+    is_ordered = models.BooleanField(default=False)
 
     def __str__(self):
         return f"CartItem: {self.book.title} in Cart of : {self.cart.user.email}"
@@ -111,3 +112,10 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order by {self.user}"
+
+
+class OrderedBook(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    book = models.ForeignKey(Book, on_delete=models.CASCADE)
+    book_quantity = models.PositiveIntegerField(default=0)

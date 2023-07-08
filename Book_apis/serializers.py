@@ -7,7 +7,8 @@ from .models import (
     Shop,
     Publisher,
     Stock,
-    CartItem
+    CartItem,
+    OrderedBook
 )
 
 
@@ -76,3 +77,9 @@ class CartItemSerializer(serializers.ModelSerializer):
 class LoginPayloadSerializer(serializers.Serializer):
     email = serializers.EmailField(required=True)
     password = serializers.CharField(required=True)
+
+
+class OrderedBookSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderedBook  
+        fields = '__all__'
